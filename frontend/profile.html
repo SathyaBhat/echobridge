@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accounts - EchoBridge</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="container">
+        <nav>
+            <ul>
+                <li><strong>EchoBridge</strong></li>
+            </ul>
+            <ul>
+                <li><a href="index.html">Compose</a></li>
+                <li><a href="profile.html" class="contrast">Accounts</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="container">
+        <article>
+            <header>
+                <h2>Connected Accounts</h2>
+            </header>
+            <div id="accounts-list">
+                <p><em>Loading accounts...</em></p>
+            </div>
+        </article>
+
+        <article>
+            <header>
+                <h3>Connect New Account</h3>
+            </header>
+
+            <details>
+                <summary>Mastodon</summary>
+                <form id="mastodon-form">
+                    <label for="instance-url">
+                        Instance URL
+                        <input type="text" id="instance-url" name="instance_url" placeholder="mastodon.social" required>
+                    </label>
+                    <button type="submit">Connect Mastodon Account</button>
+                </form>
+            </details>
+
+            <details>
+                <summary>Twitter</summary>
+                <p><em>Coming soon</em></p>
+            </details>
+
+            <details>
+                <summary>Bluesky</summary>
+                <p><em>Coming soon</em></p>
+            </details>
+
+            <details>
+                <summary>Telegram</summary>
+                <p><em>Coming soon</em></p>
+            </details>
+
+            <details>
+                <summary>Discord</summary>
+                <p><em>Coming soon</em></p>
+            </details>
+        </article>
+    </main>
+
+    <footer class="container">
+        <small>EchoBridge - Cross-post to multiple platforms</small>
+    </footer>
+
+    <script src="js/profile.js"></script>
+</body>
+</html>

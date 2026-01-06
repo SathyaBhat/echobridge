@@ -1,0 +1,11 @@
+services:
+  echobridge:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - ECHOBRIDGE_DB_PATH=/app/data/echobridge.db
+      - ECHOBRIDGE_UPLOAD_DIR=/app/data/uploads
+    restart: unless-stopped

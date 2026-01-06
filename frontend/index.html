@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoBridge</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="container">
+        <nav>
+            <ul>
+                <li><strong>EchoBridge</strong></li>
+            </ul>
+            <ul>
+                <li><a href="index.html" class="contrast">Compose</a></li>
+                <li><a href="profile.html">Accounts</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="container">
+        <article>
+            <header>
+                <h2>Compose Post</h2>
+            </header>
+
+            <form id="compose-form">
+                <label for="content">
+                    Message
+                    <textarea id="content" name="content" rows="6" placeholder="What's on your mind?"></textarea>
+                </label>
+                <div class="char-count">
+                    <span id="char-count">0</span> characters
+                </div>
+
+                <label for="media">
+                    Attachments
+                    <input type="file" id="media" name="media" multiple accept="image/*,video/*">
+                </label>
+                <div id="media-preview" class="media-preview"></div>
+
+                <fieldset>
+                    <legend>Post to:</legend>
+                    <div id="accounts-list">
+                        <p><em>Loading accounts...</em></p>
+                    </div>
+                </fieldset>
+
+                <button type="submit" id="submit-btn">Post</button>
+            </form>
+        </article>
+
+        <article id="results-section" class="hidden">
+            <header>
+                <h3>Results</h3>
+            </header>
+            <div id="results-list"></div>
+        </article>
+    </main>
+
+    <footer class="container">
+        <small>EchoBridge - Cross-post to multiple platforms</small>
+    </footer>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
