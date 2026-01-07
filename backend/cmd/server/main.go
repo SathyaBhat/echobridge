@@ -14,7 +14,7 @@ func main() {
 	dbPath := getEnv("ECHOBRIDGE_DB_PATH", "./data/echobridge.db")
 	uploadDir := getEnv("ECHOBRIDGE_UPLOAD_DIR", "./data/uploads")
 	port := getEnv("ECHOBRIDGE_PORT", "8080")
-	frontendDir := getEnv("ECHOBRIDGE_FRONTEND_DIR", "./frontend")
+	frontendDir := getEnv("ECHOBRIDGE_FRONTEND_DIR", "../frontend")
 
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		log.Fatalf("Failed to create upload directory: %v", err)
