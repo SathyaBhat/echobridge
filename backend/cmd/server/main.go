@@ -15,6 +15,7 @@ func main() {
 	uploadDir := getEnv("ECHOBRIDGE_UPLOAD_DIR", "./data/uploads")
 	port := getEnv("ECHOBRIDGE_PORT", "8080")
 	frontendDir := getEnv("ECHOBRIDGE_FRONTEND_DIR", "../frontend")
+	baseURL := getEnv("ECHOBRIDGE_BASE_URL", "http://localhost:"+port)
 
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		log.Fatalf("Failed to create upload directory: %v", err)
@@ -26,7 +27,7 @@ func main() {
 	}
 	defer database.Close()
 
-	server := api.NewServer(database, uploadDir)
+	server := api.NewServer(database, uploadDir, baseURL)
 	router := server.Router()
 
 	absFrontendDir, _ := filepath.Abs(frontendDir)

@@ -5,19 +5,24 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/sathyabhat/echobridge/internal/db"
+	"github.com/sathyabhat/echobridge/internal/providers"
 )
 
 type Server struct {
 	db        *db.DB
 	router    *chi.Mux
 	uploadDir string
+	baseURL   string
+	mastodon  *providers.Mastodon
 }
 
-func NewServer(database *db.DB, uploadDir string) *Server {
+func NewServer(database *db.DB, uploadDir, baseURL string) *Server {
 	s := &Server{
 		db:        database,
 		router:    chi.NewRouter(),
 		uploadDir: uploadDir,
+		baseURL:   baseURL,
+		mastodon:  providers.NewMastodon(),
 	}
 	s.setupRoutes()
 	return s
