@@ -1,6 +1,8 @@
 package api
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -40,9 +42,10 @@ func (s *Server) setupRoutes() {
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 		MaxAge:           300,
 	}))
+	r.Use(privateNetworkAccessMiddleware)
 
 	r.Get(s.pathPrefix+"/config.js", s.handleConfig)
 
@@ -68,4 +71,18 @@ func (s *Server) setupRoutes() {
 
 func (s *Server) Router() *chi.Mux {
 	return s.router
+}
+
+// privateNetworkAccessMiddleware handles Chrome's Private Network Access (PNA)
+// preflight checks. When a public origin (e.g. mastodon.social) makes a request
+// to a private/local address (e.g. Tailscale 100.x.x.x), Chrome sends an OPTIONS
+// preflight with Access-Control-Request-Private-Network: true and requires the
+// server to echo back Access-Control-Allow-Private-Network: true.
+func privateNetworkAccessMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Access-Control-Request-Private-Network") == "true" {
+			w.Header().Set("Access-Control-Allow-Private-Network", "true")
+		}
+		next.ServeHTTP(w, r)
+	})
 }
