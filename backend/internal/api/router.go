@@ -38,6 +38,10 @@ func (s *Server) setupRoutes() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
+	// PNA must be before CORS: the CORS middleware short-circuits OPTIONS requests
+	// and returns without calling next, so any middleware registered after it never
+	// runs for preflights. PNA needs to add its header on the same OPTIONS response.
+	r.Use(privateNetworkAccessMiddleware)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -45,7 +49,6 @@ func (s *Server) setupRoutes() {
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
-	r.Use(privateNetworkAccessMiddleware)
 
 	r.Get(s.pathPrefix+"/config.js", s.handleConfig)
 
