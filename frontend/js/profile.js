@@ -107,7 +107,7 @@ function setupBlueskyForm() {
 }
 
 function setupMastodonForm() {
-
+    const form = document.getElementById('mastodon-form');
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
 
