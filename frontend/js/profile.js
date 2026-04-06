@@ -1,9 +1,19 @@
 const API_BASE = (window.ECHOBRIDGE_CONFIG && window.ECHOBRIDGE_CONFIG.apiBase) || '/api';
 
 document.addEventListener('DOMContentLoaded', () => {
+    requestLocalNetworkAccess();
     loadAccounts();
     setupMastodonForm();
 });
+
+async function requestLocalNetworkAccess() {
+    if (!navigator.permissions || !navigator.permissions.request) return;
+    try {
+        await navigator.permissions.request({ name: 'local-network-access' });
+    } catch (_) {
+        // API not supported in this browser version — PNA headers handle older Chrome
+    }
+}
 
 async function loadAccounts() {
     const container = document.getElementById('accounts-list');
