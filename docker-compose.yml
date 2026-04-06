@@ -4,7 +4,7 @@ services:
     expose:
       - "8080"
     volumes:
-      - ./backend/data:/app/data
+      - echobridge_data:/app/data
     environment:
       - ECHOBRIDGE_DB_PATH=/app/data/echobridge.db
       - ECHOBRIDGE_UPLOAD_DIR=/app/data/uploads
@@ -25,6 +25,9 @@ services:
       # grants permission for mastodon.social (public) → Tailscale (private) fetches.
       - "traefik.http.middlewares.echobridge-pna.headers.customResponseHeaders.Access-Control-Allow-Private-Network=true"
       - "traefik.http.routers.echobridge.middlewares=echobridge-pna"
+
+volumes:
+  echobridge_data:
 
 networks:
   dokploy-network:

@@ -106,7 +106,7 @@ function setupBlueskyForm() {
     });
 }
 
-    const form = document.getElementById('mastodon-form');
+function setupMastodonForm() {
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
