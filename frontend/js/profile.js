@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     requestLocalNetworkAccess();
     loadAccounts();
     setupMastodonForm();
+    setupBlueskyForm();
 });
 
 async function requestLocalNetworkAccess() {
@@ -62,7 +63,49 @@ async function deleteAccount(id) {
     }
 }
 
-function setupMastodonForm() {
+function setupBlueskyForm() {
+    const form = document.getElementById('bluesky-form');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const handle = document.getElementById('bluesky-handle').value.trim();
+        const appPassword = document.getElementById('bluesky-app-password').value.trim();
+
+        if (!handle || !appPassword) {
+            alert('Please enter your handle and app password');
+            return;
+        }
+
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.ariaBusy = 'true';
+
+        try {
+            const response = await fetch(`${API_BASE}/accounts/bluesky/connect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ handle, app_password: appPassword })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                form.reset();
+                loadAccounts();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to connect account'));
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+            console.error('Bluesky connect error:', error);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.ariaBusy = 'false';
+        }
+    });
+}
+
     const form = document.getElementById('mastodon-form');
 
     form.addEventListener('submit', async (e) => {

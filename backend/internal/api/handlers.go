@@ -52,6 +52,62 @@ type MastodonAuthResponse struct {
 
 var oauthStates = make(map[string]string)
 
+// handleBlueskyConnect authenticates with an app password and saves the account.
+type BlueskyConnectRequest struct {
+	Handle      string `json:"handle"`
+	AppPassword string `json:"app_password"`
+	PDSURL      string `json:"pds_url,omitempty"`
+}
+
+func (s *Server) handleBlueskyConnect(w http.ResponseWriter, r *http.Request) {
+	var req BlueskyConnectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Handle == "" || req.AppPassword == "" {
+		writeError(w, http.StatusBadRequest, "Handle and app password are required")
+		return
+	}
+
+	session, err := s.bluesky.CreateSession(req.PDSURL, req.Handle, req.AppPassword)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("Failed to authenticate: %v", err))
+		return
+	}
+
+	displayName := session.DisplayName
+	if displayName == "" {
+		displayName = session.Handle
+	}
+
+	pdsURL := req.PDSURL
+	if pdsURL == "" {
+		pdsURL = "https://bsky.social"
+	}
+
+	account := &models.Account{
+		ID:           uuid.New().String(),
+		Provider:     models.ProviderBluesky,
+		DisplayName:  displayName,
+		Username:     session.Handle,
+		InstanceURL:  pdsURL,
+		AccessToken:  session.AccessJwt,
+		RefreshToken: session.RefreshJwt,
+		ChannelID:    session.DID, // DID required for repo field when posting
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	if err := s.db.CreateAccount(account); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to save account")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "connected", "handle": session.Handle})
+}
+
 func (s *Server) handleMastodonAuth(w http.ResponseWriter, r *http.Request) {
 	var req MastodonAuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -260,6 +316,18 @@ func (s *Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		provider, err := s.providerFor(account)
+		if err != nil {
+			results = append(results, models.PostResult{
+				AccountID:   account.ID,
+				Provider:    string(account.Provider),
+				DisplayName: account.DisplayName,
+				Success:     false,
+				Error:       err.Error(),
+			})
+			continue
+		}
+
 		var mediaIDs []string
 		for _, localMediaID := range req.MediaIDs {
 			media, err := s.db.GetMedia(localMediaID)
@@ -272,7 +340,7 @@ func (s *Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			remoteID, err := s.mastodon.UploadMedia(r.Context(), account, file, media.Filename, media.ContentType)
+			remoteID, err := provider.UploadMedia(r.Context(), account, file, media.Filename, media.ContentType)
 			file.Close()
 			if err != nil {
 				continue
@@ -280,7 +348,7 @@ func (s *Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 			mediaIDs = append(mediaIDs, remoteID)
 		}
 
-		result, err := s.mastodon.Post(r.Context(), account, req.Content, mediaIDs)
+		result, err := provider.Post(r.Context(), account, req.Content, mediaIDs)
 		if err != nil {
 			results = append(results, models.PostResult{
 				AccountID:   account.ID,
@@ -295,6 +363,17 @@ func (s *Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, models.PostResponse{Results: results})
+}
+
+func (s *Server) providerFor(account *models.Account) (providers.Provider, error) {
+	switch account.Provider {
+	case models.ProviderMastodon:
+		return s.mastodon, nil
+	case models.ProviderBluesky:
+		return s.bluesky, nil
+	default:
+		return nil, fmt.Errorf("unsupported provider: %s", account.Provider)
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {

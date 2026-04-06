@@ -53,7 +53,19 @@
 
             <details>
                 <summary>Bluesky</summary>
-                <p><em>Coming soon</em></p>
+                <form id="bluesky-form">
+                    <label for="bluesky-handle">
+                        Handle
+                        <input type="text" id="bluesky-handle" name="handle" placeholder="you.bsky.social" required>
+                    </label>
+                    <label for="bluesky-app-password">
+                        App Password
+                        <input type="password" id="bluesky-app-password" name="app_password"
+                               placeholder="xxxx-xxxx-xxxx-xxxx" required>
+                        <small>Create one at <a href="https://bsky.app/settings/app-passwords" target="_blank">bsky.app/settings/app-passwords</a></small>
+                    </label>
+                    <button type="submit">Connect Bluesky Account</button>
+                </form>
             </details>
 
             <details>

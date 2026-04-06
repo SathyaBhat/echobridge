@@ -17,6 +17,7 @@ type Server struct {
 	baseURL    string
 	pathPrefix string
 	mastodon   *providers.Mastodon
+	bluesky    *providers.Bluesky
 }
 
 func NewServer(database *db.DB, uploadDir, baseURL, pathPrefix string) *Server {
@@ -26,7 +27,8 @@ func NewServer(database *db.DB, uploadDir, baseURL, pathPrefix string) *Server {
 		uploadDir:  uploadDir,
 		baseURL:    baseURL,
 		pathPrefix: pathPrefix,
-		mastodon:   providers.NewMastodon(),
+			mastodon:   providers.NewMastodon(),
+		bluesky:    providers.NewBluesky(),
 	}
 	s.setupRoutes()
 	return s
@@ -61,6 +63,8 @@ func (s *Server) setupRoutes() {
 
 			r.Post("/mastodon/auth", s.handleMastodonAuth)
 			r.Get("/mastodon/callback", s.handleMastodonCallback)
+
+			r.Post("/bluesky/connect", s.handleBlueskyConnect)
 		})
 
 		r.Route("/media", func(r chi.Router) {
