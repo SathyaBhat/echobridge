@@ -77,15 +77,13 @@ func (s *Server) Router() *chi.Mux {
 }
 
 // privateNetworkAccessMiddleware handles Chrome's Private Network Access (PNA)
-// preflight checks. When a public origin (e.g. mastodon.social) makes a request
-// to a private/local address (e.g. Tailscale 100.x.x.x), Chrome sends an OPTIONS
-// preflight with Access-Control-Request-Private-Network: true and requires the
-// server to echo back Access-Control-Allow-Private-Network: true.
+// checks. It unconditionally sets Access-Control-Allow-Private-Network: true on
+// every response so that Chrome allows cross-origin fetches from public origins
+// (e.g. mastodon.social) to private/local addresses (e.g. Tailscale 100.x.x.x).
+// This covers both the OPTIONS preflight and the actual request.
 func privateNetworkAccessMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Access-Control-Request-Private-Network") == "true" {
-			w.Header().Set("Access-Control-Allow-Private-Network", "true")
-		}
+		w.Header().Set("Access-Control-Allow-Private-Network", "true")
 		next.ServeHTTP(w, r)
 	})
 }

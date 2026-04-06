@@ -21,6 +21,10 @@ services:
       - "traefik.http.routers.echobridge.tls=true"
       - "traefik.http.routers.echobridge.tls.certresolver=tailscale"
       - "traefik.http.routers.echobridge.tls.domains[0].main=wraeclast.bishop-bass.ts.net"
+      # Inject Access-Control-Allow-Private-Network on every response so Chrome
+      # grants permission for mastodon.social (public) → Tailscale (private) fetches.
+      - "traefik.http.middlewares.echobridge-pna.headers.customResponseHeaders.Access-Control-Allow-Private-Network=true"
+      - "traefik.http.routers.echobridge.middlewares=echobridge-pna"
 
 networks:
   dokploy-network:
