@@ -9,20 +9,22 @@ import (
 )
 
 type Server struct {
-	db        *db.DB
-	router    *chi.Mux
-	uploadDir string
-	baseURL   string
-	mastodon  *providers.Mastodon
+	db         *db.DB
+	router     *chi.Mux
+	uploadDir  string
+	baseURL    string
+	pathPrefix string
+	mastodon   *providers.Mastodon
 }
 
-func NewServer(database *db.DB, uploadDir, baseURL string) *Server {
+func NewServer(database *db.DB, uploadDir, baseURL, pathPrefix string) *Server {
 	s := &Server{
-		db:        database,
-		router:    chi.NewRouter(),
-		uploadDir: uploadDir,
-		baseURL:   baseURL,
-		mastodon:  providers.NewMastodon(),
+		db:         database,
+		router:     chi.NewRouter(),
+		uploadDir:  uploadDir,
+		baseURL:    baseURL,
+		pathPrefix: pathPrefix,
+		mastodon:   providers.NewMastodon(),
 	}
 	s.setupRoutes()
 	return s
@@ -42,7 +44,9 @@ func (s *Server) setupRoutes() {
 		MaxAge:           300,
 	}))
 
-	r.Route("/api", func(r chi.Router) {
+	r.Get(s.pathPrefix+"/config.js", s.handleConfig)
+
+	r.Route(s.pathPrefix+"/api", func(r chi.Router) {
 		r.Get("/health", s.handleHealth)
 
 		r.Route("/accounts", func(r chi.Router) {

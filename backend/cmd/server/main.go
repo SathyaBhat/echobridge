@@ -15,6 +15,7 @@ func main() {
 	uploadDir := getEnv("ECHOBRIDGE_UPLOAD_DIR", "./data/uploads")
 	port := getEnv("ECHOBRIDGE_PORT", "8080")
 	frontendDir := getEnv("ECHOBRIDGE_FRONTEND_DIR", "../frontend")
+	pathPrefix := getEnv("ECHOBRIDGE_PATH_PREFIX", "")
 	baseURL := getEnv("ECHOBRIDGE_BASE_URL", "http://localhost:"+port)
 
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
@@ -27,12 +28,16 @@ func main() {
 	}
 	defer database.Close()
 
-	server := api.NewServer(database, uploadDir, baseURL)
+	server := api.NewServer(database, uploadDir, baseURL, pathPrefix)
 	router := server.Router()
 
 	absFrontendDir, _ := filepath.Abs(frontendDir)
 	fs := http.FileServer(http.Dir(absFrontendDir))
-	router.Handle("/*", fs)
+	if pathPrefix != "" {
+		router.Handle(pathPrefix+"/*", http.StripPrefix(pathPrefix, fs))
+	} else {
+		router.Handle("/*", fs)
+	}
 
 	log.Printf("Starting EchoBridge server on :%s", port)
 	log.Printf("Frontend served from: %s", absFrontendDir)

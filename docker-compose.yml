@@ -1,11 +1,27 @@
 services:
   echobridge:
     build: .
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     volumes:
       - ./data:/app/data
     environment:
       - ECHOBRIDGE_DB_PATH=/app/data/echobridge.db
       - ECHOBRIDGE_UPLOAD_DIR=/app/data/uploads
+      - ECHOBRIDGE_BASE_URL=https://wraeclast.bishop-bass.ts.net/echobridge
+      - ECHOBRIDGE_PATH_PREFIX=/echobridge
     restart: unless-stopped
+    networks:
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.echobridge.rule=Host(`wraeclast.bishop-bass.ts.net`) && PathPrefix(`/echobridge`)"
+      - "traefik.http.routers.echobridge.entrypoints=web,websecure"
+      - "traefik.http.services.echobridge.loadbalancer.server.port=8080"
+      - "traefik.http.routers.echobridge.tls=true"
+      - "traefik.http.routers.echobridge.tls.certresolver=tailscale"
+      - "traefik.http.routers.echobridge.tls.domains[0].main=wraeclast.bishop-bass.ts.net"
+
+networks:
+  dokploy-network:
+    external: true

@@ -149,7 +149,7 @@ func (s *Server) handleMastodonCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	http.Redirect(w, r, "/profile.html?connected=mastodon", http.StatusFound)
+	http.Redirect(w, r, s.pathPrefix+"/profile.html?connected=mastodon", http.StatusFound)
 }
 
 func (s *Server) handleMediaUpload(w http.ResponseWriter, r *http.Request) {
@@ -302,6 +302,12 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/javascript")
+	w.Header().Set("Cache-Control", "no-cache")
+	fmt.Fprintf(w, "window.ECHOBRIDGE_CONFIG = { apiBase: %q };\n", s.pathPrefix+"/api")
 }
 
 func generateState() string {

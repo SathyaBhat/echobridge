@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+const API_BASE = (window.ECHOBRIDGE_CONFIG && window.ECHOBRIDGE_CONFIG.apiBase) || '/api';
 
 document.addEventListener('DOMContentLoaded', () => {
     loadAccounts();
