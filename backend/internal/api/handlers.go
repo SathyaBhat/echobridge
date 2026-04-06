@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/sathyabhat/echobridge/internal/models"
+	"github.com/sathyabhat/echobridge/internal/providers"
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +63,8 @@ func (s *Server) handleMastodonAuth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Instance URL is required")
 		return
 	}
+
+	req.InstanceURL = providers.NormalizeInstanceURL(req.InstanceURL)
 
 	redirectURI := s.baseURL + "/api/accounts/mastodon/callback"
 

@@ -35,7 +35,7 @@ type MastodonAppResponse struct {
 }
 
 func (m *Mastodon) RegisterApp(instanceURL, redirectURI string) (*models.MastodonApp, error) {
-	instanceURL = normalizeInstanceURL(instanceURL)
+	instanceURL = NormalizeInstanceURL(instanceURL)
 
 	data := url.Values{}
 	data.Set("client_name", "EchoBridge")
@@ -68,7 +68,7 @@ func (m *Mastodon) RegisterApp(instanceURL, redirectURI string) (*models.Mastodo
 }
 
 func (m *Mastodon) GetAuthURL(instanceURL, clientID, redirectURI, state string) string {
-	instanceURL = normalizeInstanceURL(instanceURL)
+	instanceURL = NormalizeInstanceURL(instanceURL)
 
 	params := url.Values{}
 	params.Set("client_id", clientID)
@@ -87,7 +87,7 @@ type TokenResponse struct {
 }
 
 func (m *Mastodon) ExchangeCode(instanceURL, clientID, clientSecret, code, redirectURI string) (*TokenResponse, error) {
-	instanceURL = normalizeInstanceURL(instanceURL)
+	instanceURL = NormalizeInstanceURL(instanceURL)
 
 	data := url.Values{}
 	data.Set("client_id", clientID)
@@ -124,7 +124,7 @@ type MastodonAccount struct {
 }
 
 func (m *Mastodon) VerifyCredentials(instanceURL, accessToken string) (*MastodonAccount, error) {
-	instanceURL = normalizeInstanceURL(instanceURL)
+	instanceURL = NormalizeInstanceURL(instanceURL)
 
 	req, err := http.NewRequest("GET", instanceURL+"/api/v1/accounts/verify_credentials", nil)
 	if err != nil {
@@ -157,7 +157,7 @@ type StatusResponse struct {
 }
 
 func (m *Mastodon) Post(ctx context.Context, account *models.Account, content string, mediaIDs []string) (*models.PostResult, error) {
-	instanceURL := normalizeInstanceURL(account.InstanceURL)
+	instanceURL := NormalizeInstanceURL(account.InstanceURL)
 
 	data := url.Values{}
 	data.Set("status", content)
@@ -220,7 +220,7 @@ type MediaResponse struct {
 }
 
 func (m *Mastodon) UploadMedia(ctx context.Context, account *models.Account, file io.Reader, filename, contentType string) (string, error) {
-	instanceURL := normalizeInstanceURL(account.InstanceURL)
+	instanceURL := NormalizeInstanceURL(account.InstanceURL)
 
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
@@ -264,7 +264,7 @@ func (m *Mastodon) UploadMedia(ctx context.Context, account *models.Account, fil
 	return mediaResp.ID, nil
 }
 
-func normalizeInstanceURL(instanceURL string) string {
+func NormalizeInstanceURL(instanceURL string) string {
 	instanceURL = strings.TrimSpace(instanceURL)
 	instanceURL = strings.TrimSuffix(instanceURL, "/")
 
