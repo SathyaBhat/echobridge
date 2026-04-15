@@ -25,6 +25,12 @@ func NewBluesky() *Bluesky {
 	}
 }
 
+// NewBlueskyWithClient creates a Bluesky provider using the given HTTP client.
+// Intended for testing.
+func NewBlueskyWithClient(client *http.Client) *Bluesky {
+	return &Bluesky{httpClient: client}
+}
+
 func (b *Bluesky) Name() string {
 	return "bluesky"
 }
@@ -42,6 +48,38 @@ type BlueskySessionResponse struct {
 	Handle      string `json:"handle"`
 	DID         string `json:"did"`
 	DisplayName string `json:"displayName,omitempty"`
+}
+
+// RefreshSession exchanges a refresh JWT for a new access/refresh token pair.
+func (b *Bluesky) RefreshSession(pdsURL, refreshJwt string) (*BlueskySessionResponse, error) {
+	if pdsURL == "" {
+		pdsURL = blueskyDefaultPDS
+	}
+
+	req, err := http.NewRequest(http.MethodPost,
+		pdsURL+"/xrpc/com.atproto.server.refreshSession", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+refreshJwt)
+
+	resp, err := b.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to refresh session: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to refresh session: %s - %s", resp.Status, string(respBody))
+	}
+
+	var session BlueskySessionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
+		return nil, fmt.Errorf("failed to decode refresh response: %w", err)
+	}
+
+	return &session, nil
 }
 
 // CreateSession authenticates with an app password and returns session tokens.

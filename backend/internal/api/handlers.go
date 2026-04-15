@@ -328,6 +328,16 @@ func (s *Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// Bluesky access tokens expire after ~2 hours; refresh before posting.
+		if account.Provider == models.ProviderBluesky && account.RefreshToken != "" {
+			session, err := s.bluesky.RefreshSession(account.InstanceURL, account.RefreshToken)
+			if err == nil {
+				_ = s.db.UpdateAccountTokens(account.ID, session.AccessJwt, session.RefreshJwt)
+				account.AccessToken = session.AccessJwt
+				account.RefreshToken = session.RefreshJwt
+			}
+		}
+
 		var mediaIDs []string
 		for _, localMediaID := range req.MediaIDs {
 			media, err := s.db.GetMedia(localMediaID)

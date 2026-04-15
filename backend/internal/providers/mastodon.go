@@ -24,6 +24,12 @@ func NewMastodon() *Mastodon {
 	}
 }
 
+// NewMastodonWithClient creates a Mastodon provider using the given HTTP client.
+// Intended for testing.
+func NewMastodonWithClient(client *http.Client) *Mastodon {
+	return &Mastodon{httpClient: client}
+}
+
 func (m *Mastodon) Name() string {
 	return "mastodon"
 }

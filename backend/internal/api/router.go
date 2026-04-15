@@ -1,12 +1,16 @@
 package api
 
 import (
+	"context"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/sathyabhat/echobridge/internal/db"
+	"github.com/sathyabhat/echobridge/internal/models"
 	"github.com/sathyabhat/echobridge/internal/providers"
 )
 
@@ -16,8 +20,8 @@ type Server struct {
 	uploadDir  string
 	baseURL    string
 	pathPrefix string
-	mastodon   *providers.Mastodon
-	bluesky    *providers.Bluesky
+	mastodon   MastodonService
+	bluesky    BlueskyService
 }
 
 func NewServer(database *db.DB, uploadDir, baseURL, pathPrefix string) *Server {
@@ -78,6 +82,43 @@ func (s *Server) setupRoutes() {
 
 func (s *Server) Router() *chi.Mux {
 	return s.router
+}
+
+// StartTokenRefresher refreshes Bluesky access tokens on the given interval.
+// It runs until ctx is cancelled. Call it in a goroutine.
+func (s *Server) StartTokenRefresher(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.refreshBlueskyTokens()
+		}
+	}
+}
+
+func (s *Server) refreshBlueskyTokens() {
+	accounts, err := s.db.ListAccounts()
+	if err != nil {
+		log.Printf("token refresh: failed to list accounts: %v", err)
+		return
+	}
+	for i := range accounts {
+		a := &accounts[i]
+		if a.Provider != models.ProviderBluesky || a.RefreshToken == "" {
+			continue
+		}
+		session, err := s.bluesky.RefreshSession(a.InstanceURL, a.RefreshToken)
+		if err != nil {
+			log.Printf("token refresh: failed to refresh bluesky account %s (%s): %v", a.ID, a.DisplayName, err)
+			continue
+		}
+		if err := s.db.UpdateAccountTokens(a.ID, session.AccessJwt, session.RefreshJwt); err != nil {
+			log.Printf("token refresh: failed to save tokens for account %s: %v", a.ID, err)
+		}
+	}
 }
 
 // privateNetworkAccessMiddleware handles Chrome's Private Network Access (PNA)

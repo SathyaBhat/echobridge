@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/sathyabhat/echobridge/internal/api"
 	"github.com/sathyabhat/echobridge/internal/db"
@@ -29,6 +31,11 @@ func main() {
 	defer database.Close()
 
 	server := api.NewServer(database, uploadDir, baseURL, pathPrefix)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go server.StartTokenRefresher(ctx, 60*time.Minute)
+
 	router := server.Router()
 
 	absFrontendDir, _ := filepath.Abs(frontendDir)
