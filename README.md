@@ -13,8 +13,8 @@ A self-hosted cross-posting application for publishing to multiple social platfo
 ## Supported Platforms
 
 - [x] Mastodon (any instance)
+- [x] Bluesky (via app passwords, with rich text — hashtags and links)
 - [ ] Twitter (coming soon)
-- [ ] Bluesky (coming soon)
 - [ ] Telegram (coming soon)
 - [ ] Discord (coming soon)
 
