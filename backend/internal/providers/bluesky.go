@@ -7,10 +7,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/sathyabhat/echobridge/internal/models"
+)
+
+var (
+	hashtagRe = regexp.MustCompile(`#[a-zA-Z][a-zA-Z0-9_]*`)
+	urlRe     = regexp.MustCompile(`https?://[^\s]+`)
 )
 
 const blueskyDefaultPDS = "https://bsky.social"
@@ -128,10 +135,11 @@ type blueskyCreateRecordRequest struct {
 }
 
 type blueskyPostRecord struct {
-	Type      string         `json:"$type"`
-	Text      string         `json:"text"`
-	CreatedAt string         `json:"createdAt"`
-	Embed     *blueskyEmbed  `json:"embed,omitempty"`
+	Type      string          `json:"$type"`
+	Text      string          `json:"text"`
+	CreatedAt string          `json:"createdAt"`
+	Facets    []blueskyFacet  `json:"facets,omitempty"`
+	Embed     *blueskyEmbed   `json:"embed,omitempty"`
 }
 
 type blueskyEmbed struct {
@@ -155,9 +163,61 @@ type blobRef struct {
 	Link string `json:"$link"`
 }
 
+// Facets for rich text (links and hashtags).
+type blueskyFacet struct {
+	Index    blueskyByteSlice  `json:"index"`
+	Features []blueskyFeature  `json:"features"`
+}
+
+type blueskyByteSlice struct {
+	ByteStart int `json:"byteStart"`
+	ByteEnd   int `json:"byteEnd"`
+}
+
+type blueskyFeature struct {
+	Type string `json:"$type"`
+	// For links:
+	URI string `json:"uri,omitempty"`
+	// For hashtags:
+	Tag string `json:"tag,omitempty"`
+}
+
 type blueskyCreateRecordResponse struct {
 	URI string `json:"uri"`
 	CID string `json:"cid"`
+}
+
+// parseFacets scans text for URLs and hashtags and returns the corresponding
+// facet annotations using byte offsets (as required by the AT Protocol).
+func parseFacets(text string) []blueskyFacet {
+	textBytes := []byte(text)
+	var facets []blueskyFacet
+
+	for _, loc := range urlRe.FindAllIndex(textBytes, -1) {
+		uri := string(textBytes[loc[0]:loc[1]])
+		facets = append(facets, blueskyFacet{
+			Index: blueskyByteSlice{ByteStart: loc[0], ByteEnd: loc[1]},
+			Features: []blueskyFeature{
+				{Type: "app.bsky.richtext.facet#link", URI: uri},
+			},
+		})
+	}
+
+	for _, loc := range hashtagRe.FindAllIndex(textBytes, -1) {
+		tag := string(textBytes[loc[0]+1 : loc[1]]) // strip leading '#'
+		facets = append(facets, blueskyFacet{
+			Index: blueskyByteSlice{ByteStart: loc[0], ByteEnd: loc[1]},
+			Features: []blueskyFeature{
+				{Type: "app.bsky.richtext.facet#tag", Tag: tag},
+			},
+		})
+	}
+
+	sort.Slice(facets, func(i, j int) bool {
+		return facets[i].Index.ByteStart < facets[j].Index.ByteStart
+	})
+
+	return facets
 }
 
 func (b *Bluesky) Post(ctx context.Context, account *models.Account, content string, mediaIDs []string) (*models.PostResult, error) {
@@ -165,6 +225,7 @@ func (b *Bluesky) Post(ctx context.Context, account *models.Account, content str
 		Type:      "app.bsky.feed.post",
 		Text:      content,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		Facets:    parseFacets(content),
 	}
 
 	// mediaIDs are JSON-encoded blueskyBlob values returned by UploadMedia.

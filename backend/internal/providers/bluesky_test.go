@@ -203,6 +203,126 @@ func TestBlueskyUploadMedia_ServerError(t *testing.T) {
 	}
 }
 
+// --- parseFacets ---
+
+func TestParseFacets(t *testing.T) {
+	tests := []struct {
+		name  string
+		text  string
+		want  []blueskyFacet
+	}{
+		{
+			name: "no facets",
+			text: "Hello world",
+			want: nil,
+		},
+		{
+			name: "single hashtag",
+			text: "Hello #golang",
+			want: []blueskyFacet{
+				{
+					Index:    blueskyByteSlice{ByteStart: 6, ByteEnd: 13},
+					Features: []blueskyFeature{{Type: "app.bsky.richtext.facet#tag", Tag: "golang"}},
+				},
+			},
+		},
+		{
+			name: "single URL",
+			text: "Check https://example.com out",
+			want: []blueskyFacet{
+				{
+					Index:    blueskyByteSlice{ByteStart: 6, ByteEnd: 25},
+					Features: []blueskyFeature{{Type: "app.bsky.richtext.facet#link", URI: "https://example.com"}},
+				},
+			},
+		},
+		{
+			name: "hashtag and URL sorted by byte offset",
+			text: "#go https://go.dev",
+			want: []blueskyFacet{
+				{
+					Index:    blueskyByteSlice{ByteStart: 0, ByteEnd: 3},
+					Features: []blueskyFeature{{Type: "app.bsky.richtext.facet#tag", Tag: "go"}},
+				},
+				{
+					Index:    blueskyByteSlice{ByteStart: 4, ByteEnd: 18},
+					Features: []blueskyFeature{{Type: "app.bsky.richtext.facet#link", URI: "https://go.dev"}},
+				},
+			},
+		},
+		{
+			name: "multiple hashtags",
+			text: "#foo and #bar",
+			want: []blueskyFacet{
+				{
+					Index:    blueskyByteSlice{ByteStart: 0, ByteEnd: 4},
+					Features: []blueskyFeature{{Type: "app.bsky.richtext.facet#tag", Tag: "foo"}},
+				},
+				{
+					Index:    blueskyByteSlice{ByteStart: 9, ByteEnd: 13},
+					Features: []blueskyFeature{{Type: "app.bsky.richtext.facet#tag", Tag: "bar"}},
+				},
+			},
+		},
+		{
+			name: "hashtag starting with digit is ignored",
+			text: "count #1st item",
+			want: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseFacets(tc.text)
+			if len(got) != len(tc.want) {
+				t.Fatalf("parseFacets(%q): got %d facets, want %d\ngot:  %+v\nwant: %+v",
+					tc.text, len(got), len(tc.want), got, tc.want)
+			}
+			for i, f := range got {
+				w := tc.want[i]
+				if f.Index != w.Index {
+					t.Errorf("facet[%d] index: got %+v, want %+v", i, f.Index, w.Index)
+				}
+				if len(f.Features) != len(w.Features) {
+					t.Errorf("facet[%d] features len: got %d, want %d", i, len(f.Features), len(w.Features))
+					continue
+				}
+				feat := f.Features[0]
+				wfeat := w.Features[0]
+				if feat.Type != wfeat.Type || feat.URI != wfeat.URI || feat.Tag != wfeat.Tag {
+					t.Errorf("facet[%d] feature: got %+v, want %+v", i, feat, wfeat)
+				}
+			}
+		})
+	}
+}
+
+func TestBlueskyPost_FacetsIncluded(t *testing.T) {
+	var capturedRecord blueskyPostRecord
+	mux := http.NewServeMux()
+	mux.HandleFunc("/xrpc/com.atproto.repo.createRecord", func(w http.ResponseWriter, r *http.Request) {
+		var req blueskyCreateRecordRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		json.Unmarshal(req.Record, &capturedRecord)
+		json.NewEncoder(w).Encode(blueskyCreateRecordResponse{
+			URI: "at://did:plc:testdid/app.bsky.feed.post/rkey123",
+		})
+	})
+	srv, bluesky := newBlueskyTestServer(t, mux)
+
+	result, err := bluesky.Post(context.Background(), blueskyAccount(srv.URL),
+		"Hello #golang at https://go.dev", nil)
+	if err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("expected success, got: %s", result.Error)
+	}
+	if len(capturedRecord.Facets) != 2 {
+		t.Fatalf("expected 2 facets, got %d: %+v", len(capturedRecord.Facets), capturedRecord.Facets)
+	}
+}
+
 // --- atURIToURL ---
 
 func TestAtURIToURL(t *testing.T) {
