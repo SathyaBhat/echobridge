@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/html"
+
 	"github.com/sathyabhat/echobridge/internal/models"
 )
 
@@ -364,6 +366,147 @@ func (b *Bluesky) UploadMedia(ctx context.Context, account *models.Account, file
 }
 
 // --- Helpers ---
+
+// fetchLinkCard fetches uri, parses Open Graph metadata, and returns a link
+// card embed. pdsURL and accessToken are used only if an og:image needs to be
+// uploaded as a thumbnail blob. Returns an error if the page fetch fails; thumb
+// upload failures are silent (card returned without Thumb).
+func (b *Bluesky) fetchLinkCard(ctx context.Context, pdsURL, accessToken, uri string) (*blueskyExternalEmbed, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; EchoBridge/1.0)")
+
+	resp, err := b.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetchLinkCard: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetchLinkCard: %s returned %s", uri, resp.Status)
+	}
+
+	title, description, imageURL := parseOGTags(resp.Body)
+
+	card := &blueskyExternalEmbed{
+		Type: "app.bsky.embed.external",
+		External: blueskyLinkCard{
+			URI:         uri,
+			Title:       title,
+			Description: description,
+		},
+	}
+
+	if imageURL != "" && pdsURL != "" {
+		thumb, err := b.fetchAndUploadThumb(ctx, pdsURL, accessToken, imageURL)
+		if err == nil {
+			card.External.Thumb = thumb
+		}
+		// thumb upload failure is intentionally silent
+	}
+
+	return card, nil
+}
+
+// parseOGTags reads HTML from r and extracts og:title (fallback: <title>),
+// og:description (fallback: meta[name=description]), and og:image.
+func parseOGTags(r io.Reader) (title, description, imageURL string) {
+	doc, err := html.Parse(r)
+	if err != nil {
+		return
+	}
+
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			switch n.Data {
+			case "meta":
+				prop := attrVal(n, "property")
+				name := attrVal(n, "name")
+				content := attrVal(n, "content")
+				switch prop {
+				case "og:title":
+					title = content
+				case "og:description":
+					description = content
+				case "og:image":
+					imageURL = content
+				}
+				if name == "description" && description == "" {
+					description = content
+				}
+			case "title":
+				if title == "" && n.FirstChild != nil {
+					title = n.FirstChild.Data
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	return
+}
+
+// attrVal returns the value of the named attribute on n, or "".
+func attrVal(n *html.Node, name string) string {
+	for _, a := range n.Attr {
+		if a.Key == name {
+			return a.Val
+		}
+	}
+	return ""
+}
+
+// fetchAndUploadThumb downloads imageURL and uploads it to the PDS as a blob.
+func (b *Bluesky) fetchAndUploadThumb(ctx context.Context, pdsURL, accessToken, imageURL string) (*blueskyBlob, error) {
+	imgResp, err := b.httpClient.Get(imageURL)
+	if err != nil {
+		return nil, err
+	}
+	defer imgResp.Body.Close()
+
+	if imgResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("image fetch %s: %s", imageURL, imgResp.Status)
+	}
+
+	data, err := io.ReadAll(imgResp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	contentType := imgResp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		pdsURL+"/xrpc/com.atproto.repo.uploadBlob", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", contentType)
+
+	resp, err := b.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("uploadBlob: %s", resp.Status)
+	}
+
+	var uploadResp blueskyUploadBlobResponse
+	if err := json.NewDecoder(resp.Body).Decode(&uploadResp); err != nil {
+		return nil, err
+	}
+	return &uploadResp.Blob, nil
+}
 
 // atURIToURL converts an AT URI (at://did/app.bsky.feed.post/rkey) to a
 // bsky.app web URL using the account handle.

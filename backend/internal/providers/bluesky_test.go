@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -320,6 +321,146 @@ func TestBlueskyPost_FacetsIncluded(t *testing.T) {
 	}
 	if len(capturedRecord.Facets) != 2 {
 		t.Fatalf("expected 2 facets, got %d: %+v", len(capturedRecord.Facets), capturedRecord.Facets)
+	}
+}
+
+// --- fetchLinkCard ---
+
+func TestFetchLinkCard_OGTags(t *testing.T) {
+	ogMux := http.NewServeMux()
+	ogMux.HandleFunc("/page", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<html><head>
+<meta property="og:title" content="OG Title"/>
+<meta property="og:description" content="OG Desc"/>
+</head><body></body></html>`)
+	})
+	ogSrv := httptest.NewServer(ogMux)
+	defer ogSrv.Close()
+
+	b := NewBlueskyWithClient(ogSrv.Client())
+	card, err := b.fetchLinkCard(context.Background(), "", "", ogSrv.URL+"/page")
+	if err != nil {
+		t.Fatalf("fetchLinkCard: %v", err)
+	}
+	if card.External.Title != "OG Title" {
+		t.Errorf("Title: got %q, want %q", card.External.Title, "OG Title")
+	}
+	if card.External.Description != "OG Desc" {
+		t.Errorf("Description: got %q, want %q", card.External.Description, "OG Desc")
+	}
+	if card.External.URI != ogSrv.URL+"/page" {
+		t.Errorf("URI: got %q", card.External.URI)
+	}
+	if card.External.Thumb != nil {
+		t.Error("expected no thumb when og:image absent")
+	}
+}
+
+func TestFetchLinkCard_FallbackTitle(t *testing.T) {
+	ogMux := http.NewServeMux()
+	ogMux.HandleFunc("/page", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<html><head><title>Page Title</title></head><body></body></html>`)
+	})
+	ogSrv := httptest.NewServer(ogMux)
+	defer ogSrv.Close()
+
+	b := NewBlueskyWithClient(ogSrv.Client())
+	card, err := b.fetchLinkCard(context.Background(), "", "", ogSrv.URL+"/page")
+	if err != nil {
+		t.Fatalf("fetchLinkCard: %v", err)
+	}
+	if card.External.Title != "Page Title" {
+		t.Errorf("Title: got %q, want %q", card.External.Title, "Page Title")
+	}
+}
+
+func TestFetchLinkCard_WithThumbnail(t *testing.T) {
+	blobData := blueskyBlob{
+		Type:     "blob",
+		Ref:      blobRef{Link: "bafkreithumb"},
+		MimeType: "image/jpeg",
+		Size:     100,
+	}
+
+	var srv2 *httptest.Server
+	mux2 := http.NewServeMux()
+	mux2.HandleFunc("/page", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, `<html><head>
+<meta property="og:title" content="Title"/>
+<meta property="og:image" content="%s/img"/>
+</head><body></body></html>`, srv2.URL)
+	})
+	mux2.HandleFunc("/img", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Write([]byte("fakejpeg"))
+	})
+	mux2.HandleFunc("/xrpc/com.atproto.repo.uploadBlob", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(blueskyUploadBlobResponse{Blob: blobData})
+	})
+	srv2 = httptest.NewServer(mux2)
+	defer srv2.Close()
+
+	b := NewBlueskyWithClient(srv2.Client())
+	card, err := b.fetchLinkCard(context.Background(), srv2.URL, "token", srv2.URL+"/page")
+	if err != nil {
+		t.Fatalf("fetchLinkCard: %v", err)
+	}
+	if card.External.Thumb == nil {
+		t.Fatal("expected Thumb to be set")
+	}
+	if card.External.Thumb.Ref.Link != "bafkreithumb" {
+		t.Errorf("Thumb ref: got %q, want %q", card.External.Thumb.Ref.Link, "bafkreithumb")
+	}
+}
+
+func TestFetchLinkCard_ThumbUploadFails_CardStillReturned(t *testing.T) {
+	var srv3 *httptest.Server
+	mux3 := http.NewServeMux()
+	mux3.HandleFunc("/page", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, `<html><head>
+<meta property="og:title" content="Title"/>
+<meta property="og:image" content="%s/img"/>
+</head><body></body></html>`, srv3.URL)
+	})
+	mux3.HandleFunc("/img", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Write([]byte("fakejpeg"))
+	})
+	mux3.HandleFunc("/xrpc/com.atproto.repo.uploadBlob", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "server error", http.StatusInternalServerError)
+	})
+	srv3 = httptest.NewServer(mux3)
+	defer srv3.Close()
+
+	b := NewBlueskyWithClient(srv3.Client())
+	card, err := b.fetchLinkCard(context.Background(), srv3.URL, "token", srv3.URL+"/page")
+	if err != nil {
+		t.Fatalf("fetchLinkCard: %v", err)
+	}
+	if card.External.Title != "Title" {
+		t.Errorf("Title: got %q, want %q", card.External.Title, "Title")
+	}
+	if card.External.Thumb != nil {
+		t.Error("expected no Thumb when upload fails")
+	}
+}
+
+func TestFetchLinkCard_ServerError_ReturnsError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/page", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	b := NewBlueskyWithClient(srv.Client())
+	_, err := b.fetchLinkCard(context.Background(), "", "", srv.URL+"/page")
+	if err == nil {
+		t.Fatal("expected error for non-200 response")
 	}
 }
 
