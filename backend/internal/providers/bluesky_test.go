@@ -9,6 +9,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -641,6 +642,47 @@ func TestBlueskyPost_LinkCardFetchFails_PostSucceeds(t *testing.T) {
 	}
 	if !result.Success {
 		t.Fatalf("expected post to succeed even when card fetch fails: %s", result.Error)
+	}
+}
+
+// --- UploadMedia compression integration ---
+
+func TestUploadMedia_CompressesOversizedImage(t *testing.T) {
+	var uploadedSize int
+	var uploadedCT string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/xrpc/com.atproto.repo.uploadBlob", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		uploadedSize = len(body)
+		uploadedCT = r.Header.Get("Content-Type")
+		json.NewEncoder(w).Encode(blueskyUploadBlobResponse{
+			Blob: blueskyBlob{
+				Type:     "blob",
+				Ref:      blobRef{Link: "bafy123"},
+				MimeType: uploadedCT,
+				Size:     int64(uploadedSize),
+			},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	imgData := makeOversizedJPEG(t, 2_100_000)
+
+	b := NewBlueskyWithClient(srv.Client())
+	acc := blueskyAccount(srv.URL)
+
+	_, err := b.UploadMedia(context.Background(), acc,
+		bytes.NewReader(imgData), "photo.jpg", "image/jpeg")
+	if err != nil {
+		t.Fatalf("UploadMedia: %v", err)
+	}
+	if uploadedSize >= 2_000_000 {
+		t.Errorf("uploaded size %d still exceeds 2MB limit", uploadedSize)
+	}
+	if uploadedCT != "image/jpeg" {
+		t.Errorf("uploaded content type: got %q, want %q", uploadedCT, "image/jpeg")
 	}
 }
 

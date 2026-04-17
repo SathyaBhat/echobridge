@@ -343,6 +343,8 @@ func (b *Bluesky) UploadMedia(ctx context.Context, account *models.Account, file
 		return "", fmt.Errorf("failed to read file: %w", err)
 	}
 
+	data, contentType, _ = compressImage(data, contentType)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		pdsURL+"/xrpc/com.atproto.repo.uploadBlob", bytes.NewReader(data))
 	if err != nil {
