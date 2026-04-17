@@ -1,9 +1,14 @@
 package providers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,6 +35,61 @@ func blueskyAccount(pdsURL string) *models.Account {
 		AccessToken: "bsky-token",
 		ChannelID:   "did:plc:testdid",
 	}
+}
+
+// makeTestJPEG creates a minimal valid JPEG of the given pixel dimensions.
+func makeTestJPEG(t *testing.T, w, h int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 95}); err != nil {
+		t.Fatalf("makeTestJPEG: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// makeOversizedJPEG creates a valid JPEG padded with trailing zeros to exceed
+// minSize bytes. Go's JPEG decoder stops at the EOI marker, so the trailing
+// zeros are ignored during decode; re-encoding produces a small file well
+// under 2MB.
+func makeOversizedJPEG(t *testing.T, minSize int) []byte {
+	t.Helper()
+	img := image.NewNRGBA(image.Rect(0, 0, 200, 200))
+	for y := 0; y < 200; y++ {
+		for x := 0; x < 200; x++ {
+			img.SetNRGBA(x, y, color.NRGBA{R: uint8(x), G: uint8(y), B: 128, A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 80}); err != nil {
+		t.Fatalf("makeOversizedJPEG: %v", err)
+	}
+	// Pad to minSize with zero bytes (ignored by JPEG decoder after EOI marker).
+	padded := make([]byte, minSize)
+	copy(padded, buf.Bytes())
+	return padded
+}
+
+// makeOversizedPNG creates a PNG that encodes to at least minSize bytes. Uses
+// pseudo-random pixels that PNG's deflate cannot compress efficiently.
+func makeOversizedPNG(t *testing.T, minSize int) []byte {
+	t.Helper()
+	side := 2000
+	img := image.NewNRGBA(image.Rect(0, 0, side, side))
+	for y := 0; y < side; y++ {
+		for x := 0; x < side; x++ {
+			v := uint32(x^(y<<8)^(x*y)^(x<<16)^y)
+			img.SetNRGBA(x, y, color.NRGBA{R: uint8(v), G: uint8(v >> 8), B: uint8(v >> 16), A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("makeOversizedPNG: %v", err)
+	}
+	if buf.Len() < minSize {
+		t.Skipf("could not generate PNG of size %d (got %d) — skipping", minSize, buf.Len())
+	}
+	return buf.Bytes()
 }
 
 // --- CreateSession ---
@@ -581,6 +641,69 @@ func TestBlueskyPost_LinkCardFetchFails_PostSucceeds(t *testing.T) {
 	}
 	if !result.Success {
 		t.Fatalf("expected post to succeed even when card fetch fails: %s", result.Error)
+	}
+}
+
+// --- compressImage ---
+
+func TestCompressImage_UnderLimit_Passthrough(t *testing.T) {
+	data := makeTestJPEG(t, 100, 100)
+	if len(data) >= 2_000_000 {
+		t.Skip("test image unexpectedly large")
+	}
+	got, gotCT, err := compressImage(data, "image/jpeg")
+	if err != nil {
+		t.Fatalf("compressImage: %v", err)
+	}
+	if gotCT != "image/jpeg" {
+		t.Errorf("content type: got %q, want %q", gotCT, "image/jpeg")
+	}
+	if !bytes.Equal(got, data) {
+		t.Error("expected data to be returned unchanged when under limit")
+	}
+}
+
+func TestCompressImage_JPEG_OverLimit_Compressed(t *testing.T) {
+	data := makeOversizedJPEG(t, 2_100_000)
+
+	got, gotCT, err := compressImage(data, "image/jpeg")
+	if err != nil {
+		t.Fatalf("compressImage: %v", err)
+	}
+	if gotCT != "image/jpeg" {
+		t.Errorf("content type: got %q, want %q", gotCT, "image/jpeg")
+	}
+	if len(got) >= 2_000_000 {
+		t.Errorf("compressed size %d still exceeds 2MB", len(got))
+	}
+}
+
+func TestCompressImage_PNG_OverLimit_ReencodedAsJPEG(t *testing.T) {
+	data := makeOversizedPNG(t, 2_100_000)
+
+	got, gotCT, err := compressImage(data, "image/png")
+	if err != nil {
+		t.Fatalf("compressImage: %v", err)
+	}
+	if gotCT != "image/jpeg" {
+		t.Errorf("content type: got %q, want %q", gotCT, "image/jpeg")
+	}
+	if len(got) >= 2_000_000 {
+		t.Errorf("compressed size %d still exceeds 2MB", len(got))
+	}
+}
+
+func TestCompressImage_DecodeFailure_ReturnsOriginal(t *testing.T) {
+	corrupt := []byte("this is not a valid image")
+	got, gotCT, err := compressImage(corrupt, "image/jpeg")
+	if err != nil {
+		t.Fatalf("expected no error on decode failure, got: %v", err)
+	}
+	if !bytes.Equal(got, corrupt) {
+		t.Error("expected original data returned on decode failure")
+	}
+	if gotCT != "image/jpeg" {
+		t.Errorf("content type: got %q, want %q", gotCT, "image/jpeg")
 	}
 }
 

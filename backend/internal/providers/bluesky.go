@@ -5,6 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
+	_ "image/gif"
+	_ "image/png"
 	"io"
 	"net/http"
 	"regexp"
@@ -12,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/image/webp"
 	"golang.org/x/net/html"
 
 	"github.com/sathyabhat/echobridge/internal/models"
@@ -372,6 +377,49 @@ func (b *Bluesky) UploadMedia(ctx context.Context, account *models.Account, file
 }
 
 // --- Helpers ---
+
+const blueskyMaxBlobSize = 2_000_000
+
+// compressImage returns data ready to upload to Bluesky. If data is already
+// under 2MB it is returned unchanged. Otherwise the image is decoded and
+// re-encoded as JPEG at decreasing quality levels until it fits. On decode
+// failure the original data and contentType are returned unchanged so the
+// caller can let the upload fail with the platform's own error message.
+func compressImage(data []byte, contentType string) ([]byte, string, error) {
+	if len(data) <= blueskyMaxBlobSize {
+		return data, contentType, nil
+	}
+
+	var img image.Image
+	var err error
+
+	if contentType == "image/webp" {
+		img, err = webp.Decode(bytes.NewReader(data))
+	} else {
+		img, _, err = image.Decode(bytes.NewReader(data))
+	}
+	if err != nil {
+		// Corrupt or unsupported format — return original and let upload fail.
+		return data, contentType, nil
+	}
+
+	var best []byte
+	for _, quality := range []int{85, 75, 60, 50} {
+		var buf bytes.Buffer
+		if encErr := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); encErr != nil {
+			continue
+		}
+		best = buf.Bytes()
+		if len(best) <= blueskyMaxBlobSize {
+			break
+		}
+	}
+
+	if best == nil {
+		return data, contentType, nil
+	}
+	return best, "image/jpeg", nil
+}
 
 // fetchLinkCard fetches uri, parses Open Graph metadata, and returns a link
 // card embed. pdsURL and accessToken are used only if an og:image needs to be
