@@ -323,6 +323,23 @@ func TestBlueskyPost_FacetsIncluded(t *testing.T) {
 	}
 }
 
+// --- fetchLinkCard structs compile check ---
+
+func TestBlueskyExternalEmbedStructs(t *testing.T) {
+	card := blueskyExternalEmbed{
+		Type: "app.bsky.embed.external",
+		External: blueskyLinkCard{
+			URI:         "https://example.com",
+			Title:       "Example",
+			Description: "A page",
+			Thumb:       nil,
+		},
+	}
+	if card.Type != "app.bsky.embed.external" {
+		t.Errorf("unexpected type: %s", card.Type)
+	}
+}
+
 // --- atURIToURL ---
 
 func TestAtURIToURL(t *testing.T) {

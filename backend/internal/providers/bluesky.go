@@ -135,11 +135,11 @@ type blueskyCreateRecordRequest struct {
 }
 
 type blueskyPostRecord struct {
-	Type      string          `json:"$type"`
-	Text      string          `json:"text"`
-	CreatedAt string          `json:"createdAt"`
-	Facets    []blueskyFacet  `json:"facets,omitempty"`
-	Embed     *blueskyEmbed   `json:"embed,omitempty"`
+	Type      string         `json:"$type"`
+	Text      string         `json:"text"`
+	CreatedAt string         `json:"createdAt"`
+	Facets    []blueskyFacet `json:"facets,omitempty"`
+	Embed     any            `json:"embed,omitempty"`
 }
 
 type blueskyEmbed struct {
@@ -161,6 +161,19 @@ type blueskyBlob struct {
 
 type blobRef struct {
 	Link string `json:"$link"`
+}
+
+// blueskyExternalEmbed is the app.bsky.embed.external embed for link cards.
+type blueskyExternalEmbed struct {
+	Type     string          `json:"$type"` // "app.bsky.embed.external"
+	External blueskyLinkCard `json:"external"`
+}
+
+type blueskyLinkCard struct {
+	URI         string       `json:"uri"`
+	Title       string       `json:"title"`
+	Description string       `json:"description"`
+	Thumb       *blueskyBlob `json:"thumb,omitempty"`
 }
 
 // Facets for rich text (links and hashtags).
@@ -238,7 +251,7 @@ func (b *Bluesky) Post(ctx context.Context, account *models.Account, content str
 			}
 		}
 		if len(images) > 0 {
-			record.Embed = &blueskyEmbed{
+			record.Embed = blueskyEmbed{
 				Type:   "app.bsky.embed.images",
 				Images: images,
 			}
