@@ -686,6 +686,93 @@ func TestUploadMedia_CompressesOversizedImage(t *testing.T) {
 	}
 }
 
+func TestCompressImage_PreservesOrientation(t *testing.T) {
+	// Build a wide (landscape) image, then embed EXIF orientation=6 (rotate 90° CW)
+	// to simulate a portrait photo stored sideways. After compression the pixel
+	// dimensions should be swapped (tall, not wide), proving the rotation was applied.
+	const origW, origH = 200, 100 // landscape in storage
+	img := image.NewRGBA(image.Rect(0, 0, origW, origH))
+	for y := 0; y < origH; y++ {
+		for x := 0; x < origW; x++ {
+			img.Set(x, y, color.RGBA{R: uint8(x), G: uint8(y), B: 128, A: 255})
+		}
+	}
+
+	// Encode to JPEG first.
+	var rawBuf bytes.Buffer
+	if err := jpeg.Encode(&rawBuf, img, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatalf("jpeg.Encode: %v", err)
+	}
+
+	// Inject EXIF APP1 segment with orientation=6 (rotate 90° CW).
+	withEXIF := injectEXIFOrientation(t, rawBuf.Bytes(), 6)
+
+	// Pad to exceed 2MB so compressImage actually re-encodes.
+	padded := make([]byte, 2_100_000)
+	copy(padded, withEXIF)
+
+	got, gotCT, err := compressImage(padded, "image/jpeg")
+	if err != nil {
+		t.Fatalf("compressImage: %v", err)
+	}
+	if gotCT != "image/jpeg" {
+		t.Errorf("content type: got %q, want %q", gotCT, "image/jpeg")
+	}
+
+	// Decode the output and check dimensions are rotated (tall, not wide).
+	outImg, _, err := image.Decode(bytes.NewReader(got))
+	if err != nil {
+		t.Fatalf("decode output: %v", err)
+	}
+	b := outImg.Bounds()
+	outW, outH := b.Dx(), b.Dy()
+	if outW >= outH {
+		t.Errorf("expected portrait output (h>w) after orientation=6, got %dx%d", outW, outH)
+	}
+}
+
+// injectEXIFOrientation takes a JPEG and inserts a minimal APP1/EXIF segment
+// with the given orientation value (1–8). The segment is inserted after the
+// SOI marker (first 2 bytes).
+func injectEXIFOrientation(t *testing.T, jpegData []byte, orientation uint16) []byte {
+	t.Helper()
+	// Minimal EXIF APP1:
+	// - APP1 marker: FF E1
+	// - Length (big-endian, includes 2-byte length field itself)
+	// - "Exif\x00\x00"
+	// - TIFF header (little-endian): "II" + 0x002A + offset to IFD (8)
+	// - IFD: 1 entry count + orientation tag
+	// TIFF IFD entry for orientation (tag 0x0112):
+	//   tag(2) + type SHORT(2) + count(4) + value(4)
+	//   all little-endian
+	tiff := []byte{
+		'I', 'I', // little-endian
+		0x2A, 0x00, // magic
+		0x08, 0x00, 0x00, 0x00, // offset to first IFD
+		// IFD
+		0x01, 0x00, // 1 entry
+		0x12, 0x01, // tag: Orientation (0x0112)
+		0x03, 0x00, // type: SHORT
+		0x01, 0x00, 0x00, 0x00, // count: 1
+		byte(orientation), byte(orientation >> 8), 0x00, 0x00, // value
+		// Next IFD offset = 0 (no more IFDs)
+		0x00, 0x00, 0x00, 0x00,
+	}
+	exifHeader := []byte("Exif\x00\x00")
+	payload := append(exifHeader, tiff...)
+	// APP1 length = 2 (length field) + len(payload)
+	app1Len := uint16(2 + len(payload))
+	app1 := []byte{0xFF, 0xE1, byte(app1Len >> 8), byte(app1Len)}
+	app1 = append(app1, payload...)
+
+	// Insert after SOI (first 2 bytes).
+	out := make([]byte, 0, len(jpegData)+len(app1))
+	out = append(out, jpegData[:2]...) // SOI
+	out = append(out, app1...)
+	out = append(out, jpegData[2:]...)
+	return out
+}
+
 // --- compressImage ---
 
 func TestCompressImage_UnderLimit_Passthrough(t *testing.T) {

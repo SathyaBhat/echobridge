@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
-	"image/jpeg"
+	"image/draw"
 	_ "image/gif"
+	"image/jpeg"
 	_ "image/png"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rwcarlsen/goexif/exif"
 	"golang.org/x/image/webp"
 	"golang.org/x/net/html"
 
@@ -383,10 +385,11 @@ func (b *Bluesky) UploadMedia(ctx context.Context, account *models.Account, file
 const blueskyMaxBlobSize = 2_000_000
 
 // compressImage returns data ready to upload to Bluesky. If data is already
-// under 2MB it is returned unchanged. Otherwise the image is decoded and
-// re-encoded as JPEG at decreasing quality levels until it fits. On decode
-// failure the original data and contentType are returned unchanged so the
-// caller can let the upload fail with the platform's own error message.
+// under 2MB it is returned unchanged. Otherwise the image is decoded,
+// orientation is applied from EXIF (so the re-encoded output has correct
+// pixel order without needing an EXIF tag), and re-encoded as JPEG at
+// decreasing quality levels until it fits. On decode failure the original
+// data and contentType are returned unchanged.
 func compressImage(data []byte, contentType string) ([]byte, string, error) {
 	if len(data) <= blueskyMaxBlobSize {
 		return data, contentType, nil
@@ -405,6 +408,8 @@ func compressImage(data []byte, contentType string) ([]byte, string, error) {
 		return data, contentType, nil
 	}
 
+	img = applyEXIFOrientation(img, data)
+
 	var best []byte
 	for _, quality := range []int{85, 75, 60, 50} {
 		var buf bytes.Buffer
@@ -421,6 +426,115 @@ func compressImage(data []byte, contentType string) ([]byte, string, error) {
 		return data, contentType, nil
 	}
 	return best, "image/jpeg", nil
+}
+
+// applyEXIFOrientation reads the EXIF orientation tag from raw and returns img
+// rotated/flipped to match. If EXIF is absent or unreadable, img is returned
+// unchanged.
+func applyEXIFOrientation(img image.Image, raw []byte) image.Image {
+	x, err := exif.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return img
+	}
+	tag, err := x.Get(exif.Orientation)
+	if err != nil {
+		return img
+	}
+	orientation, err := tag.Int(0)
+	if err != nil {
+		return img
+	}
+
+	switch orientation {
+	case 2:
+		return flipH(img)
+	case 3:
+		return rotate180(img)
+	case 4:
+		return flipV(img)
+	case 5:
+		return flipH(rotate90CW(img))
+	case 6:
+		return rotate90CW(img)
+	case 7:
+		return flipH(rotate90CCW(img))
+	case 8:
+		return rotate90CCW(img)
+	}
+	return img // orientation 1 or unknown: no-op
+}
+
+func rotate90CW(src image.Image) image.Image {
+	b := src.Bounds()
+	dst := image.NewRGBA(image.Rect(0, 0, b.Dy(), b.Dx()))
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			dst.Set(b.Max.Y-1-y, x, src.At(x, y))
+		}
+	}
+	return dst
+}
+
+func rotate90CCW(src image.Image) image.Image {
+	b := src.Bounds()
+	dst := image.NewRGBA(image.Rect(0, 0, b.Dy(), b.Dx()))
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			dst.Set(y, b.Max.X-1-x, src.At(x, y))
+		}
+	}
+	return dst
+}
+
+func rotate180(src image.Image) image.Image {
+	b := src.Bounds()
+	dst := image.NewRGBA(b)
+	draw.Draw(dst, b, src, b.Min, draw.Src)
+	// Flip both axes.
+	w, h := b.Dx(), b.Dy()
+	for y := 0; y < h/2; y++ {
+		for x := 0; x < w; x++ {
+			a := dst.RGBAAt(x, y)
+			b2 := dst.RGBAAt(w-1-x, h-1-y)
+			dst.SetRGBA(x, y, b2)
+			dst.SetRGBA(w-1-x, h-1-y, a)
+		}
+	}
+	// Handle middle row for odd heights.
+	if h%2 == 1 {
+		y := h / 2
+		for x := 0; x < w/2; x++ {
+			a := dst.RGBAAt(x, y)
+			b2 := dst.RGBAAt(w-1-x, y)
+			dst.SetRGBA(x, y, b2)
+			dst.SetRGBA(w-1-x, y, a)
+		}
+	}
+	return dst
+}
+
+func flipH(src image.Image) image.Image {
+	b := src.Bounds()
+	dst := image.NewRGBA(b)
+	w := b.Dx()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			dst.Set(w-1-x+b.Min.X, y, src.At(x, y))
+		}
+	}
+	return dst
+}
+
+func flipV(src image.Image) image.Image {
+	b := src.Bounds()
+	dst := image.NewRGBA(b)
+	h := b.Dy()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			dst.Set(x, h-1-y+b.Min.Y, src.At(x, y))
+		}
+	}
+	return dst
 }
 
 // fetchLinkCard fetches uri, parses Open Graph metadata, and returns a link
