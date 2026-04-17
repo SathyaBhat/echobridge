@@ -236,6 +236,11 @@ func parseFacets(text string) []blueskyFacet {
 }
 
 func (b *Bluesky) Post(ctx context.Context, account *models.Account, content string, mediaIDs []string) (*models.PostResult, error) {
+	pdsURL := account.InstanceURL
+	if pdsURL == "" {
+		pdsURL = blueskyDefaultPDS
+	}
+
 	record := blueskyPostRecord{
 		Type:      "app.bsky.feed.post",
 		Text:      content,
@@ -258,16 +263,17 @@ func (b *Bluesky) Post(ctx context.Context, account *models.Account, content str
 				Images: images,
 			}
 		}
+	} else if urls := urlRe.FindAllString(content, 1); len(urls) > 0 {
+		card, err := b.fetchLinkCard(ctx, pdsURL, account.AccessToken, urls[0])
+		if err == nil {
+			record.Embed = card
+		}
+		// card fetch failure is intentionally silent
 	}
 
 	recordJSON, err := json.Marshal(record)
 	if err != nil {
 		return failResult(account, "failed to marshal post record"), nil
-	}
-
-	pdsURL := account.InstanceURL
-	if pdsURL == "" {
-		pdsURL = blueskyDefaultPDS
 	}
 
 	// DID is stored in ChannelID (see handleBlueskyConnect).

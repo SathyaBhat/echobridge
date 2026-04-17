@@ -464,6 +464,126 @@ func TestFetchLinkCard_ServerError_ReturnsError(t *testing.T) {
 	}
 }
 
+// --- Post() link card integration ---
+
+func TestBlueskyPost_LinkCardAttached_WhenNoImages(t *testing.T) {
+	var capturedRecord blueskyPostRecord
+	var srv *httptest.Server
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/page", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<html><head>
+<meta property="og:title" content="Link Title"/>
+<meta property="og:description" content="Link Desc"/>
+</head><body></body></html>`)
+	})
+	mux.HandleFunc("/xrpc/com.atproto.repo.createRecord", func(w http.ResponseWriter, r *http.Request) {
+		var req blueskyCreateRecordRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		json.Unmarshal(req.Record, &capturedRecord)
+		json.NewEncoder(w).Encode(blueskyCreateRecordResponse{
+			URI: "at://did:plc:testdid/app.bsky.feed.post/rkey123",
+		})
+	})
+	srv = httptest.NewServer(mux)
+	defer srv.Close()
+
+	acc := blueskyAccount(srv.URL)
+	b := NewBlueskyWithClient(srv.Client())
+
+	result, err := b.Post(context.Background(), acc,
+		"Check out "+srv.URL+"/page", nil)
+	if err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("expected success, got: %s", result.Error)
+	}
+
+	embedJSON, err := json.Marshal(capturedRecord.Embed)
+	if err != nil {
+		t.Fatalf("marshal embed: %v", err)
+	}
+	var embed blueskyExternalEmbed
+	if err := json.Unmarshal(embedJSON, &embed); err != nil {
+		t.Fatalf("unmarshal embed: %v", err)
+	}
+	if embed.Type != "app.bsky.embed.external" {
+		t.Errorf("embed type: got %q, want %q", embed.Type, "app.bsky.embed.external")
+	}
+	if embed.External.Title != "Link Title" {
+		t.Errorf("card title: got %q, want %q", embed.External.Title, "Link Title")
+	}
+}
+
+func TestBlueskyPost_NoLinkCard_WhenImagesPresent(t *testing.T) {
+	var capturedRecord blueskyPostRecord
+	var srv *httptest.Server
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/page", func(w http.ResponseWriter, r *http.Request) {
+		t.Error("fetchLinkCard should not be called when images are present")
+		http.Error(w, "unexpected call", http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/xrpc/com.atproto.repo.createRecord", func(w http.ResponseWriter, r *http.Request) {
+		var req blueskyCreateRecordRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		json.Unmarshal(req.Record, &capturedRecord)
+		json.NewEncoder(w).Encode(blueskyCreateRecordResponse{
+			URI: "at://did:plc:testdid/app.bsky.feed.post/rkey123",
+		})
+	})
+	srv = httptest.NewServer(mux)
+	defer srv.Close()
+
+	blob := blueskyBlob{Type: "blob", Ref: blobRef{Link: "bafy"}, MimeType: "image/jpeg", Size: 1}
+	blobJSON, _ := json.Marshal(blob)
+
+	acc := blueskyAccount(srv.URL)
+	b := NewBlueskyWithClient(srv.Client())
+
+	result, err := b.Post(context.Background(), acc,
+		"Check out "+srv.URL+"/page", []string{string(blobJSON)})
+	if err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("expected success: %s", result.Error)
+	}
+
+	embedJSON, _ := json.Marshal(capturedRecord.Embed)
+	if strings.Contains(string(embedJSON), "embed.external") {
+		t.Error("expected no external embed when images present")
+	}
+}
+
+func TestBlueskyPost_LinkCardFetchFails_PostSucceeds(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/page", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	})
+	mux.HandleFunc("/xrpc/com.atproto.repo.createRecord", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(blueskyCreateRecordResponse{
+			URI: "at://did:plc:testdid/app.bsky.feed.post/rkey123",
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	acc := blueskyAccount(srv.URL)
+	b := NewBlueskyWithClient(srv.Client())
+
+	result, err := b.Post(context.Background(), acc,
+		"Check out "+srv.URL+"/page", nil)
+	if err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("expected post to succeed even when card fetch fails: %s", result.Error)
+	}
+}
+
 // --- fetchLinkCard structs compile check ---
 
 func TestBlueskyExternalEmbedStructs(t *testing.T) {
