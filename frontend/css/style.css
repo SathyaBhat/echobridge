@@ -4,10 +4,26 @@
 
 .char-count {
     font-size: 0.875rem;
-    color: var(--muted-color);
     text-align: right;
     margin-top: -0.5rem;
     margin-bottom: 1rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.char-pill {
+    color: var(--muted-color);
+}
+
+.char-pill--warning {
+    color: #e67e22;
+}
+
+.char-pill--over {
+    color: var(--del-color);
+    font-weight: 600;
 }
 
 .media-preview {
