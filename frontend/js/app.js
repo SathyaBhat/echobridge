@@ -22,7 +22,7 @@ async function loadAccounts() {
 
         container.innerHTML = accounts.map(account => `
             <label class="account-checkbox">
-                <input type="checkbox" name="account_ids" value="${account.id}" checked>
+                <input type="checkbox" name="account_ids" value="${account.id}" data-provider="${account.provider}" checked>
                 ${account.display_name} <small>(${account.provider}${account.instance_url ? ' - ' + account.instance_url : ''})</small>
             </label>
         `).join('');
@@ -32,12 +32,55 @@ async function loadAccounts() {
     }
 }
 
-function setupCharacterCounter() {
+const PLATFORM_LIMITS = {
+    mastodon: 500,
+    bluesky: 300,
+};
+
+const PLATFORM_ICONS = {
+    mastodon: '🦣',
+    bluesky: '🦋',
+};
+
+function updateCharCounter() {
     const textarea = document.getElementById('content');
     const counter = document.getElementById('char-count');
+    const typed = textarea.value.length;
 
-    textarea.addEventListener('input', () => {
-        counter.textContent = textarea.value.length;
+    const checkboxes = document.querySelectorAll('input[name="account_ids"]:checked');
+    const providers = [...new Set(
+        Array.from(checkboxes)
+            .map(cb => cb.dataset.provider)
+            .filter(p => p && PLATFORM_LIMITS[p])
+    )];
+
+    if (providers.length === 0) {
+        counter.innerHTML = '';
+        return;
+    }
+
+    counter.innerHTML = providers.map(provider => {
+        const limit = PLATFORM_LIMITS[provider];
+        const icon = PLATFORM_ICONS[provider] || provider;
+        const remaining = limit - typed;
+        let cls = 'char-pill';
+        if (remaining < 0) {
+            cls += ' char-pill--over';
+        } else if (remaining <= Math.floor(limit * 0.2)) {
+            cls += ' char-pill--warning';
+        }
+        return `<span class="${cls}">${icon} ${remaining}</span>`;
+    }).join('');
+}
+
+function setupCharacterCounter() {
+    const textarea = document.getElementById('content');
+    textarea.addEventListener('input', updateCharCounter);
+
+    document.getElementById('accounts-list').addEventListener('change', (e) => {
+        if (e.target.matches('input[name="account_ids"]')) {
+            updateCharCounter();
+        }
     });
 }
 
@@ -140,7 +183,7 @@ function setupFormSubmit() {
             displayResults(result.results || []);
 
             document.getElementById('content').value = '';
-            document.getElementById('char-count').textContent = '0';
+            updateCharCounter();
             mediaFiles = [];
             renderMediaPreviews();
             document.getElementById('media').value = '';
