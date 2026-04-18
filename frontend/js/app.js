@@ -26,6 +26,7 @@ async function loadAccounts() {
                 ${account.display_name} <small>(${account.provider}${account.instance_url ? ' - ' + account.instance_url : ''})</small>
             </label>
         `).join('');
+        updateCharCounter();
     } catch (error) {
         container.innerHTML = '<p class="no-accounts">Failed to load accounts</p>';
         console.error('Failed to load accounts:', error);
