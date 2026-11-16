@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <title>History - EchoBridge</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="config.js"></script>
+    <script src="js/common.js"></script>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="index.html"><span class="brand-mark">E</span><span class="brand-name">EchoBridge</span></a>
+            <nav class="nav" aria-label="Main">
+                <a href="index.html">Compose</a>
+                <a href="history.html" aria-current="page">History</a>
+                <a href="profile.html">Accounts</a>
+            </nav>
+            <button class="icon-btn" id="theme-toggle" type="button" aria-label="Toggle theme"></button>
+        </div>
+    </header>
+
+    <main>
+        <div class="page-head">
+            <div>
+                <h1>History</h1>
+                <p>Everything you have posted, with the status for each platform.</p>
+            </div>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+                <div class="segmented" role="group" aria-label="Filter">
+                    <button type="button" data-filter="all" aria-pressed="true">All</button>
+                    <button type="button" data-filter="failed" aria-pressed="false">Failed</button>
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" id="clear-history">Clear all</button>
+            </div>
+        </div>
+
+        <div id="history-list" style="display:flex; flex-direction:column; gap:1rem;"></div>
+    </main>
+
+    <footer class="site-footer">EchoBridge · Cross-post to multiple platforms</footer>
+
+    <script src="js/history.js"></script>
+</body>
+</html>

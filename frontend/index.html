@@ -1,68 +1,86 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EchoBridge</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <meta name="color-scheme" content="light dark">
+    <title>Compose - EchoBridge</title>
     <link rel="stylesheet" href="css/style.css">
+    <script src="config.js"></script>
+    <script src="js/common.js"></script>
 </head>
 <body>
-    <header class="container">
-        <nav>
-            <ul>
-                <li><strong>EchoBridge</strong></li>
-            </ul>
-            <ul>
-                <li><a href="index.html" class="contrast">Compose</a></li>
-                <li><a href="profile.html">Accounts</a></li>
-            </ul>
-        </nav>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="index.html"><span class="brand-mark">E</span><span class="brand-name">EchoBridge</span></a>
+            <nav class="nav" aria-label="Main">
+                <a href="index.html" aria-current="page">Compose</a>
+                <a href="history.html">History</a>
+                <a href="profile.html">Accounts</a>
+            </nav>
+            <button class="icon-btn" id="theme-toggle" type="button" aria-label="Toggle theme"></button>
+        </div>
     </header>
 
-    <main class="container">
-        <article>
-            <header>
-                <h2>Compose Post</h2>
-            </header>
+    <main>
+        <div class="page-head">
+            <div>
+                <h1>Compose</h1>
+                <p>Write once, post everywhere. Paste or drop images anywhere on this page.</p>
+            </div>
+        </div>
 
-            <form id="compose-form">
-                <label for="content">
-                    Message
-                    <textarea id="content" name="content" rows="6" placeholder="What's on your mind?"></textarea>
-                </label>
-                <div class="char-count" id="char-count"></div>
-
-                <label for="media">
-                    Attachments
-                    <input type="file" id="media" name="media" multiple accept="image/*,video/*">
-                </label>
+        <form id="compose-form">
+            <div class="card compose-box" id="compose-box">
+                <label for="content" class="sr-only">Message</label>
+                <textarea id="content" name="content" placeholder="What's on your mind?"></textarea>
                 <div id="media-preview" class="media-preview"></div>
 
-                <fieldset>
-                    <legend>Post to:</legend>
-                    <div id="accounts-list">
-                        <p><em>Loading accounts...</em></p>
-                    </div>
-                </fieldset>
+                <div class="compose-footer">
+                    <label class="btn btn-ghost btn-sm" for="media" title="Attach images or video">
+                        📎 Attach
+                    </label>
+                    <input type="file" id="media" class="sr-only" multiple accept="image/*,video/*">
+                    <button type="button" class="btn btn-ghost btn-sm" id="clear-draft">Clear</button>
+                    <div class="char-count" id="char-count" aria-live="polite"></div>
+                </div>
+            </div>
 
-                <button type="submit" id="submit-btn">Post</button>
-            </form>
-        </article>
+            <div class="card" style="margin-top: 1rem;">
+                <div class="card-title">
+                    <h2>Post to</h2>
+                    <small id="selected-summary"></small>
+                </div>
+                <div id="accounts-list" class="chips">
+                    <p class="hint">Loading accounts…</p>
+                </div>
+            </div>
 
-        <article id="results-section" class="hidden">
-            <header>
-                <h3>Results</h3>
-            </header>
-            <div id="results-list"></div>
-        </article>
+            <div class="card hidden" id="preview-section" style="margin-top: 1rem;">
+                <div class="card-title">
+                    <h2>Preview</h2>
+                    <small>Red text will be rejected by that platform</small>
+                </div>
+                <div id="preview-list"></div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:0.75rem; margin-top: 1rem; justify-content:flex-end;">
+                <span class="hint">Ctrl/⌘ + Enter to post</span>
+                <button type="submit" class="btn" id="submit-btn">Post</button>
+            </div>
+        </form>
+
+        <section class="card hidden" id="results-section" aria-live="polite">
+            <div class="card-title">
+                <h2>Results</h2>
+                <a href="history.html" class="hint">View history</a>
+            </div>
+            <div id="results-list" class="result-list"></div>
+        </section>
     </main>
 
-    <footer class="container">
-        <small>EchoBridge - Cross-post to multiple platforms</small>
-    </footer>
+    <footer class="site-footer">EchoBridge · Cross-post to multiple platforms</footer>
 
-    <script src="config.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

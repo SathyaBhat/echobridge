@@ -1,90 +1,77 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
     <title>Accounts - EchoBridge</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <link rel="stylesheet" href="css/style.css">
+    <script src="config.js"></script>
+    <script src="js/common.js"></script>
 </head>
 <body>
-    <header class="container">
-        <nav>
-            <ul>
-                <li><strong>EchoBridge</strong></li>
-            </ul>
-            <ul>
-                <li><a href="index.html">Compose</a></li>
-                <li><a href="profile.html" class="contrast">Accounts</a></li>
-            </ul>
-        </nav>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="index.html"><span class="brand-mark">E</span><span class="brand-name">EchoBridge</span></a>
+            <nav class="nav" aria-label="Main">
+                <a href="index.html">Compose</a>
+                <a href="history.html">History</a>
+                <a href="profile.html" aria-current="page">Accounts</a>
+            </nav>
+            <button class="icon-btn" id="theme-toggle" type="button" aria-label="Toggle theme"></button>
+        </div>
     </header>
 
-    <main class="container">
-        <article>
-            <header>
-                <h2>Connected Accounts</h2>
-            </header>
-            <div id="accounts-list">
-                <p><em>Loading accounts...</em></p>
+    <main>
+        <div class="page-head">
+            <div>
+                <h1>Accounts</h1>
+                <p>Connect the platforms you want to post to.</p>
             </div>
-        </article>
+        </div>
 
-        <article>
-            <header>
-                <h3>Connect New Account</h3>
-            </header>
+        <section class="card">
+            <div class="card-title"><h2>Connected</h2></div>
+            <div id="accounts-list"><p class="hint">Loading accounts…</p></div>
+        </section>
 
-            <details>
-                <summary>Mastodon</summary>
-                <form id="mastodon-form">
-                    <label for="instance-url">
-                        Instance URL
-                        <input type="text" id="instance-url" name="instance_url" placeholder="mastodon.social" required>
-                    </label>
-                    <button type="submit">Connect Mastodon Account</button>
-                </form>
-            </details>
+        <section class="card">
+            <div class="card-title"><h2>Connect an account</h2></div>
 
-            <details>
-                <summary>Twitter</summary>
-                <p><em>Coming soon</em></p>
-            </details>
+            <div class="provider-tabs" role="tablist" aria-label="Platform">
+                <button type="button" role="tab" data-provider="mastodon" aria-selected="true">🦣 Mastodon</button>
+                <button type="button" role="tab" data-provider="bluesky" aria-selected="false">🦋 Bluesky</button>
+                <button type="button" role="tab" disabled title="Coming soon">Twitter · soon</button>
+                <button type="button" role="tab" disabled title="Coming soon">Telegram · soon</button>
+                <button type="button" role="tab" disabled title="Coming soon">Discord · soon</button>
+            </div>
 
-            <details>
-                <summary>Bluesky</summary>
-                <form id="bluesky-form">
-                    <label for="bluesky-handle">
-                        Handle
-                        <input type="text" id="bluesky-handle" name="handle" placeholder="you.bsky.social" required>
-                    </label>
-                    <label for="bluesky-app-password">
-                        App Password
-                        <input type="password" id="bluesky-app-password" name="app_password"
-                               placeholder="xxxx-xxxx-xxxx-xxxx" required>
-                        <small>Create one at <a href="https://bsky.app/settings/app-passwords" target="_blank">bsky.app/settings/app-passwords</a></small>
-                    </label>
-                    <button type="submit">Connect Bluesky Account</button>
-                </form>
-            </details>
+            <form id="mastodon-form" data-panel="mastodon">
+                <label class="field" for="instance-url">
+                    <span>Instance URL</span>
+                    <input type="text" id="instance-url" name="instance_url" placeholder="mastodon.social" autocomplete="off" required>
+                    <small>You'll be redirected to your instance to approve access.</small>
+                </label>
+                <button type="submit" class="btn">Connect Mastodon</button>
+            </form>
 
-            <details>
-                <summary>Telegram</summary>
-                <p><em>Coming soon</em></p>
-            </details>
-
-            <details>
-                <summary>Discord</summary>
-                <p><em>Coming soon</em></p>
-            </details>
-        </article>
+            <form id="bluesky-form" data-panel="bluesky" class="hidden">
+                <label class="field" for="bluesky-handle">
+                    <span>Handle</span>
+                    <input type="text" id="bluesky-handle" name="handle" placeholder="you.bsky.social" autocomplete="off" required>
+                </label>
+                <label class="field" for="bluesky-app-password">
+                    <span>App password</span>
+                    <input type="password" id="bluesky-app-password" name="app_password" placeholder="xxxx-xxxx-xxxx-xxxx" autocomplete="off" required>
+                    <small>Create one at <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener">bsky.app/settings/app-passwords</a></small>
+                </label>
+                <button type="submit" class="btn">Connect Bluesky</button>
+            </form>
+        </section>
     </main>
 
-    <footer class="container">
-        <small>EchoBridge - Cross-post to multiple platforms</small>
-    </footer>
+    <footer class="site-footer">EchoBridge · Cross-post to multiple platforms</footer>
 
-    <script src="config.js"></script>
     <script src="js/profile.js"></script>
 </body>
 </html>
