@@ -42,7 +42,17 @@ type PostResult struct {
 }
 
 type PostResponse struct {
+	PostID  string       `json:"post_id,omitempty"`
 	Results []PostResult `json:"results"`
+}
+
+// Post is a stored cross-post and its per-account outcomes.
+type Post struct {
+	ID         string       `json:"id"`
+	Content    string       `json:"content"`
+	MediaCount int          `json:"media_count"`
+	CreatedAt  time.Time    `json:"created_at"`
+	Results    []PostResult `json:"results"`
 }
 
 type Media struct {

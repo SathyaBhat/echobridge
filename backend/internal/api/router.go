@@ -31,7 +31,7 @@ func NewServer(database *db.DB, uploadDir, baseURL, pathPrefix string) *Server {
 		uploadDir:  uploadDir,
 		baseURL:    baseURL,
 		pathPrefix: pathPrefix,
-			mastodon:   providers.NewMastodon(),
+		mastodon:   providers.NewMastodon(),
 		bluesky:    providers.NewBluesky(),
 	}
 	s.setupRoutes()
@@ -76,7 +76,12 @@ func (s *Server) setupRoutes() {
 			r.Delete("/{id}", s.handleMediaDelete)
 		})
 
-		r.Post("/posts", s.handleCreatePost)
+		r.Route("/posts", func(r chi.Router) {
+			r.Post("/", s.handleCreatePost)
+			r.Get("/", s.handleListPosts)
+			r.Delete("/", s.handleClearPosts)
+			r.Delete("/{id}", s.handleDeletePost)
+		})
 	})
 }
 

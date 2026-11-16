@@ -2,3 +2,5 @@ backend/data/echobridge.db
 backend/data/uploads/
 backend/echobridge
 backend/server
+
+.env.postgres

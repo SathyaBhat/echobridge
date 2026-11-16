@@ -24,7 +24,26 @@ func main() {
 		log.Fatalf("Failed to create upload directory: %v", err)
 	}
 
-	database, err := db.New(dbPath)
+	var database *db.DB
+	var err error
+	dbDesc := dbPath
+	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
+		database, err = db.NewPostgres(databaseURL)
+		dbDesc = "postgres (DATABASE_URL)"
+		if err == nil {
+			// One-time move from a pre-existing SQLite file; no-op if there is
+			// none or if Postgres already has accounts. The file is left in place.
+			n, impErr := database.ImportSQLite(dbPath)
+			if impErr != nil {
+				log.Fatalf("Failed to import existing SQLite data from %s: %v", dbPath, impErr)
+			}
+			if n > 0 {
+				log.Printf("Imported %d rows from SQLite database %s", n, dbPath)
+			}
+		}
+	} else {
+		database, err = db.New(dbPath)
+	}
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -48,7 +67,7 @@ func main() {
 
 	log.Printf("Starting EchoBridge server on :%s", port)
 	log.Printf("Frontend served from: %s", absFrontendDir)
-	log.Printf("Database: %s", dbPath)
+	log.Printf("Database: %s", dbDesc)
 
 	if err := http.ListenAndServe(":"+port, router); err != nil {
 		log.Fatalf("Server failed: %v", err)

@@ -2,13 +2,17 @@ package api
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -372,7 +376,78 @@ func (s *Server) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, models.PostResponse{Results: results})
+	resp := models.PostResponse{Results: results}
+
+	// The posts are already published at this point, so a failure to record
+	// history is logged but must not turn the response into an error.
+	post := &models.Post{
+		ID:         uuid.NewString(),
+		Content:    req.Content,
+		MediaCount: len(req.MediaIDs),
+		CreatedAt:  time.Now().UTC(),
+		Results:    results,
+	}
+	if err := s.db.CreatePost(post); err != nil {
+		log.Printf("failed to save post history: %v", err)
+	} else {
+		resp.PostID = post.ID
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) handleListPosts(w http.ResponseWriter, r *http.Request) {
+	limit := 50
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			writeError(w, http.StatusBadRequest, "limit must be a positive integer")
+			return
+		}
+		if n > 200 {
+			n = 200
+		}
+		limit = n
+	}
+
+	var before *time.Time
+	if v := r.URL.Query().Get("before"); v != "" {
+		t, err := time.Parse(time.RFC3339Nano, v)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "before must be an RFC 3339 timestamp")
+			return
+		}
+		before = &t
+	}
+
+	posts, err := s.db.ListPosts(limit, before)
+	if err != nil {
+		log.Printf("failed to list posts: %v", err)
+		writeError(w, http.StatusInternalServerError, "Failed to list posts")
+		return
+	}
+	writeJSON(w, http.StatusOK, posts)
+}
+
+func (s *Server) handleDeletePost(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := s.db.DeletePost(id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "Post not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Failed to delete post")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleClearPosts(w http.ResponseWriter, r *http.Request) {
+	if err := s.db.DeleteAllPosts(); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to clear posts")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) providerFor(account *models.Account) (providers.Provider, error) {

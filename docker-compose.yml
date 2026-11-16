@@ -10,9 +10,16 @@ services:
       - ECHOBRIDGE_UPLOAD_DIR=/app/data/uploads
       - ECHOBRIDGE_BASE_URL=https://wraeclast.bishop-bass.ts.net/echobridge
       - ECHOBRIDGE_PATH_PREFIX=/echobridge
+      # Postgres replaces SQLite when DATABASE_URL is set. Any existing SQLite
+      # file at ECHOBRIDGE_DB_PATH is imported once on first start, then left alone.
+      - DATABASE_URL=postgres://echobridge:${POSTGRES_PASSWORD}@postgres:5432/echobridge
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - dokploy-network
+      - echobridge-db
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.echobridge.rule=Host(`wraeclast.bishop-bass.ts.net`) && PathPrefix(`/echobridge`)"
@@ -26,9 +33,29 @@ services:
       - "traefik.http.middlewares.echobridge-pna.headers.customResponseHeaders.Access-Control-Allow-Private-Network=true"
       - "traefik.http.routers.echobridge.middlewares=echobridge-pna"
 
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=echobridge
+      - POSTGRES_DB=echobridge
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - echobridge_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U echobridge -d echobridge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Private network only: never on dokploy-network, no published ports.
+    networks:
+      - echobridge-db
+
 volumes:
   echobridge_data:
+  echobridge_pgdata:
 
 networks:
   dokploy-network:
     external: true
+  echobridge-db:
