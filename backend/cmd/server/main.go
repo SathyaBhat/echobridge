@@ -58,7 +58,13 @@ func main() {
 	router := server.Router()
 
 	absFrontendDir, _ := filepath.Abs(frontendDir)
-	fs := http.FileServer(http.Dir(absFrontendDir))
+	fileServer := http.FileServer(http.Dir(absFrontendDir))
+	// Force revalidation so browsers never mix stale JS with new HTML after a deploy.
+	// Last-Modified is still sent, so unchanged files cost only a 304.
+	fs := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		fileServer.ServeHTTP(w, r)
+	})
 	if pathPrefix != "" {
 		router.Handle(pathPrefix+"/*", http.StripPrefix(pathPrefix, fs))
 	} else {
